@@ -1,12 +1,10 @@
 package com.Acrobot.Breeze.Utils;
 
+import org.bukkit.craftbukkit.v1_7_R4.inventory.CraftItemStack;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * @author Acrobot
@@ -32,11 +30,7 @@ public class InventoryUtil {
         int itemAmount = 0;
 
         for (ItemStack iStack : items.values()) {
-            if (!MaterialUtil.equals(iStack, item)) {
-                continue;
-            }
-
-            itemAmount += iStack.getAmount();
+            if (MaterialUtil.equals(iStack, item)) itemAmount += iStack.getAmount();
         }
 
         return itemAmount;
@@ -84,26 +78,28 @@ public class InventoryUtil {
      */
     public static boolean fits(ItemStack item, Inventory inventory) {
         int left = item.getAmount();
+        int maxInvStackSize = inventory.getMaxStackSize();
+        if (maxInvStackSize == Integer.MAX_VALUE) return true;
 
-        if (inventory.getMaxStackSize() == Integer.MAX_VALUE) {
-            return true;
-        }
+        // TODO gamerforEA code replace, old code:
+        // int maxStackSize = item.getMaxStackSize();
+        int maxStackSize = Math.min(maxInvStackSize, getMaxStackSize(item));
+        // TODO gamerforEA code end
 
         for (ItemStack iStack : inventory.getContents()) {
-            if (left <= 0) {
-                return true;
-            }
+            if (left <= 0) return true;
+            if (MaterialUtil.isEmpty(iStack)) left -= maxStackSize;
+            else if (MaterialUtil.equals(iStack, item)) {
+                int amount = iStack.getAmount();
 
-            if (MaterialUtil.isEmpty(iStack)) {
-                left -= item.getMaxStackSize();
-                continue;
-            }
+                // TODO gamerforEA code replace, old code:
+                // int maxStackSize1 = iStack.getMaxStackSize();
+                int maxStackSize1 = Math.min(maxStackSize, getMaxStackSize(iStack));
+                if (maxStackSize1 < amount) continue;
+                // TODO gamerforEA code end
 
-            if (!MaterialUtil.equals(iStack, item)) {
-                continue;
+                left -= maxStackSize1 - amount;
             }
-
-            left -= (iStack.getMaxStackSize() - iStack.getAmount());
         }
 
         return left <= 0;
@@ -119,13 +115,15 @@ public class InventoryUtil {
      * @return Number of leftover items
      */
     public static int add(ItemStack item, Inventory inventory, int maxStackSize) {
-        if (item.getAmount() < 1) {
-            return 0;
-        }
-
         int amountLeft = item.getAmount();
+        if (amountLeft < 1) return 0;
 
-        for (int currentSlot = 0; currentSlot < inventory.getSize() && amountLeft > 0; currentSlot++) {
+        // TODO gamerforEA code start
+        maxStackSize = Math.min(maxStackSize, Math.min(inventory.getMaxStackSize(), getMaxStackSize(item)));
+        if (maxStackSize < 1) return 0;
+        // TODO gamerforEA code end
+
+        for (int currentSlot = 0; currentSlot < inventory.getSize() && amountLeft > 0; ++currentSlot) {
             ItemStack currentItem = inventory.getItem(currentSlot);
             ItemStack duplicate = item.clone();
 
@@ -160,8 +158,18 @@ public class InventoryUtil {
      * @return Number of leftover items
      */
     public static int add(ItemStack item, Inventory inventory) {
-        return add(item, inventory, item.getMaxStackSize());
+        // TODO gamerforEA code replace, old code:
+        // return add(item, inventory, item.getMaxStackSize());
+        return add(item, inventory, getMaxStackSize(item));
+        // TODO gamerforEA code end
     }
+
+    // TODO gamerforEA code start
+    private static int getMaxStackSize(ItemStack stack) {
+        net.minecraft.server.v1_7_R4.ItemStack nmsStack = CraftItemStack.asNMSCopy(stack);
+        return nmsStack != null ? nmsStack.getMaxStackSize() : stack.getMaxStackSize();
+    }
+    // TODO gamerforEA code end
 
     /**
      * Removes an item from the inventory
@@ -183,25 +191,27 @@ public class InventoryUtil {
      * @return Merged stack array
      */
     public static ItemStack[] mergeSimilarStacks(ItemStack... items) {
-        if (items.length <= 1) {
-            return items;
-        }
+        if (items.length <= 1) return items;
+        List<ItemStack> itemList = new LinkedList();
 
-        List<ItemStack> itemList = new LinkedList<ItemStack>();
-
-        Iterating:
         for (ItemStack item : items) {
-            for (ItemStack iStack : itemList) {
+            Iterator iterator = itemList.iterator();
+
+            while (true) {
+                if (!iterator.hasNext()) {
+                    itemList.add(item);
+                    break;
+                }
+
+                ItemStack iStack = (ItemStack) iterator.next();
                 if (MaterialUtil.equals(item, iStack)) {
                     iStack.setAmount(iStack.getAmount() + item.getAmount());
-                    continue Iterating;
+                    break;
                 }
             }
-
-            itemList.add(item);
         }
 
-        return itemList.toArray(new ItemStack[itemList.size()]);
+        return itemList.toArray(new ItemStack[0]);
     }
 
     /**
@@ -229,8 +239,9 @@ public class InventoryUtil {
     public static int countItems(Map<Integer, ?> items) {
         int totalLeft = 0;
 
-        for (int left : items.keySet()) {
-            totalLeft += left;
+        int left;
+        for (Iterator var2 = items.keySet().iterator(); var2.hasNext(); totalLeft += left) {
+            left = (Integer) var2.next();
         }
 
         return totalLeft;

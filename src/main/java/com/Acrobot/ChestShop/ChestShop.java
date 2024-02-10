@@ -35,15 +35,7 @@ import com.Acrobot.ChestShop.Logging.FileFormatter;
 import com.Acrobot.ChestShop.Metadata.ItemDatabase;
 import com.Acrobot.ChestShop.Signs.RestrictedSign;
 import com.Acrobot.ChestShop.UUIDs.NameManager;
-import com.Acrobot.ChestShop.Updater.Updater;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Marker;
-import org.apache.logging.log4j.core.LogEvent;
-import org.apache.logging.log4j.core.LoggerContext;
-import org.apache.logging.log4j.core.config.LoggerConfig;
-import org.apache.logging.log4j.core.filter.AbstractFilter;
-import org.apache.logging.log4j.message.Message;
+//import com.Acrobot.ChestShop.Updater.Updater;
 import org.bukkit.Bukkit;
 import org.bukkit.Server;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -51,7 +43,7 @@ import org.bukkit.event.Event;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.mcstats.Metrics;
+//import org.mcstats.Metrics;
 
 import java.io.File;
 import java.io.IOException;
@@ -73,6 +65,8 @@ public class ChestShop extends JavaPlugin {
     private static ItemDatabase itemDatabase;
 
     private static Logger logger;
+    // TODO gamerforEA code start
+    private static PriceRestrictionModule priceRestrictionModule;
     private FileHandler handler;
 
     public ChestShop() {
@@ -82,7 +76,14 @@ public class ChestShop extends JavaPlugin {
         server = getServer();
         plugin = this;
     }
+    // TODO gamerforEA code end
 
+    public static PriceRestrictionModule getPriceRestrictionModule() {
+        return priceRestrictionModule;
+    }
+
+
+    @Override
     public void onEnable() {
         Configuration.pairFileAndClass(loadFile("config.yml"), Properties.class);
         Configuration.pairFileAndClass(loadFile("local.yml"), Messages.class);
@@ -116,8 +117,8 @@ public class ChestShop extends JavaPlugin {
         getCommand("csGive").setExecutor(new Give());
         getCommand("cstoggle").setExecutor(new Toggle());
 
-        startStatistics();
-        startUpdater();
+//        startStatistics();
+//        startUpdater();
     }
 
     private void handleMigrations() {
@@ -182,6 +183,7 @@ public class ChestShop extends JavaPlugin {
         return handler;
     }
 
+    @Override
     public void onDisable() {
         getServer().getScheduler().cancelTasks(this);
 
@@ -195,8 +197,7 @@ public class ChestShop extends JavaPlugin {
 
     //////////////////    REGISTER EVENTS, SCHEDULER & STATS    ///////////////////////////
     private void registerEvents() {
-        registerEvent(new com.Acrobot.ChestShop.Plugins.ChestShop()); //Chest protection
-
+        registerEvent(new com.Acrobot.ChestShop.Plugins.ChestShop());
         registerPreShopCreationEvents();
         registerPreTransactionEvents();
         registerPostShopCreationEvents();
@@ -280,7 +281,11 @@ public class ChestShop extends JavaPlugin {
 
     private void registerModules() {
         registerEvent(new DiscountModule());
-        registerEvent(new PriceRestrictionModule());
+
+        // TODO gamerforEA code replace, old code:
+        // registerEvent(new PriceRestrictionModule());
+        registerEvent(priceRestrictionModule = new PriceRestrictionModule());
+        // TODO gamerforEA code end
 
         registerEconomicalModules();
     }
@@ -298,23 +303,23 @@ public class ChestShop extends JavaPlugin {
         server.getScheduler().runTaskTimerAsynchronously(this, runnable, startTime, repetitionTime);
     }
 
-    private void startStatistics() {
-        try {
-            new Metrics(this).start();
-        } catch (IOException ex) {
-            ChestShop.getBukkitLogger().severe("There was an error while submitting statistics.");
-        }
-    }
-
-    private static final int PROJECT_BUKKITDEV_ID = 31263;
-
-    private void startUpdater() {
-        if (Properties.TURN_OFF_UPDATES) {
-            return;
-        }
-
-        new Updater(this, PROJECT_BUKKITDEV_ID, this.getFile(), Updater.UpdateType.DEFAULT, true);
-    }
+//    private void startStatistics() {
+//        try {
+//            new Metrics(this).start();
+//        } catch (IOException ex) {
+//            ChestShop.getBukkitLogger().severe("There was an error while submitting statistics.");
+//        }
+//    }
+//
+//    private static final int PROJECT_BUKKITDEV_ID = 31263;
+//
+//    private void startUpdater() {
+//        if (Properties.TURN_OFF_UPDATES) {
+//            return;
+//        }
+//
+//        new Updater(this, PROJECT_BUKKITDEV_ID, this.getFile(), Updater.UpdateType.DEFAULT, true);
+//    }
 
     ///////////////////////////////////////////////////////////////////////////////
 

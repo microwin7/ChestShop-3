@@ -3,11 +3,11 @@ package com.Acrobot.Breeze.Utils;
 import com.Acrobot.ChestShop.ChestShop;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Iterables;
-import info.somethingodd.OddItem.OddItem;
 import org.bukkit.CoalType;
 import org.bukkit.DyeColor;
 import org.bukkit.Material;
 import org.bukkit.TreeSpecies;
+import org.bukkit.craftbukkit.v1_7_R4.inventory.CraftItemStack;
 import org.bukkit.entity.EntityType;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -24,11 +24,9 @@ import java.util.regex.Pattern;
 public class MaterialUtil {
     public static final Pattern DURABILITY = Pattern.compile(":(\\d)*");
     public static final Pattern METADATA = Pattern.compile("#([0-9a-zA-Z])*");
-
     public static final boolean LONG_NAME = true;
     public static final boolean SHORT_NAME = false;
-
-    private static final Map<String, Material> MATERIAL_CACHE = new HashMap<String, Material>();
+    private static final Map<String, Material> MATERIAL_CACHE = new HashMap();
 
     /**
      * Checks if the itemStack is empty or null
@@ -48,7 +46,12 @@ public class MaterialUtil {
      * @return Are they equal?
      */
     public static boolean equals(ItemStack one, ItemStack two) {
-        return one.isSimilar(two);
+        // TODO gamerforEA code replace, old code:
+        // return one.isSimilar(two);
+        CraftItemStack craftOne = one instanceof CraftItemStack ? (CraftItemStack) one : CraftItemStack.asCraftCopy(one);
+        CraftItemStack craftTwo = two instanceof CraftItemStack ? (CraftItemStack) two : CraftItemStack.asCraftCopy(two);
+        return craftOne.isSimilar(craftTwo);
+        // TODO gamerforEA code end
     }
 
     /**
@@ -59,19 +62,14 @@ public class MaterialUtil {
      */
     public static Material getMaterial(String name) {
         String formatted = name.replaceAll(" |_", "").toUpperCase();
-
-        if (MATERIAL_CACHE.containsKey(formatted)) {
-            return MATERIAL_CACHE.get(formatted);
-        }
-
+        if (MATERIAL_CACHE.containsKey(formatted)) return MATERIAL_CACHE.get(formatted);
         Material material = Material.matchMaterial(name);
 
         if (material != null) {
             MATERIAL_CACHE.put(formatted, material);
             return material;
         }
-
-        short length = Short.MAX_VALUE;
+        short length = 32767;
 
         for (Material currentMaterial : Material.values()) {
             String matName = currentMaterial.name();
@@ -94,7 +92,7 @@ public class MaterialUtil {
      * @return ItemStack's name
      */
     public static String getName(ItemStack itemStack) {
-        return getName(itemStack, LONG_NAME);
+        return getName(itemStack, true);
     }
 
     /**
@@ -105,13 +103,8 @@ public class MaterialUtil {
      * @return ItemStack's name
      */
     public static String getName(ItemStack itemStack, boolean showDataValue) {
-        String dataName = DataValue.name(itemStack);
-
-        if (dataName != null && showDataValue) {
-            return StringUtil.capitalizeFirstLetter(dataName + '_' + itemStack.getType(), '_');
-        } else {
-            return StringUtil.capitalizeFirstLetter(itemStack.getType().toString(), '_');
-        }
+        String dataName = MaterialUtil.DataValue.name(itemStack);
+        return dataName != null && showDataValue ? StringUtil.capitalizeFirstLetter(dataName + '_' + itemStack.getType(), '_') : StringUtil.capitalizeFirstLetter(itemStack.getType().toString(), '_');
     }
 
     /**
@@ -127,14 +120,9 @@ public class MaterialUtil {
         itemName = StringUtil.capitalizeFirstLetter(itemName, '_');
 
         name.append(itemName);
+        if (itemStack.getDurability() != 0) name.append(':').append(itemStack.getDurability());
 
-        if (itemStack.getDurability() != 0) {
-            name.append(':').append(itemStack.getDurability());
-        }
-
-        if (itemStack.hasItemMeta()) {
-            name.append('#').append(Metadata.getItemCode(itemStack));
-        }
+        if (itemStack.hasItemMeta()) name.append('#').append(Metadata.getItemCode(itemStack));
 
         return name.toString();
     }
@@ -146,47 +134,29 @@ public class MaterialUtil {
      * @return ItemStack
      */
     public static ItemStack getItem(String itemName) {
-        ItemStack itemStack = Odd.getFromString(itemName);
-
-        if (itemStack != null) {
-            return itemStack;
-        }
-
+        ItemStack itemStack = MaterialUtil.Odd.getFromString(itemName);
+        if (itemStack != null) return itemStack;
         String[] split = Iterables.toArray(Splitter.onPattern(":|-|#").trimResults().split(itemName), String.class);
-
         Material material = getMaterial(split[0]);
         short durability = getDurability(itemName);
-
         if (material == null) {
-            if (!split[0].contains(" ")) {
-                return null;
-            }
+            if (!split[0].contains(" ")) return null;
 
-            for (int index = split[0].indexOf(' '); index >= 0; index = split[0].indexOf(' ', index + 1)) {
+            for (int index = split[0].indexOf(32); index >= 0; index = split[0].indexOf(32, index + 1)) {
                 material = getMaterial(split[0].substring(index));
-
                 if (material != null) {
-                    if (durability == 0) {
-                        durability = DataValue.get(split[0].substring(0, index), material);
-                    }
-
+                    if (durability == 0) durability = (short) DataValue.get(split[0].substring(0, index), material);
                     break;
                 }
             }
 
-            if (material == null) {
-                return null;
-            }
+            if (material == null) return null;
         }
 
         itemStack = new ItemStack(material);
         itemStack.setDurability(durability);
-
         ItemMeta meta = getMetadata(itemName);
-
-        if (meta != null) {
-            itemStack.setItemMeta(meta);
-        }
+        if (meta != null) itemStack.setItemMeta(meta);
 
         return itemStack;
     }
@@ -199,20 +169,13 @@ public class MaterialUtil {
      */
     public static short getDurability(String itemName) {
         Matcher m = DURABILITY.matcher(itemName);
-
-        if (!m.find()) {
-            return 0;
-        }
-
+        if (!m.find()) return (short) 0;
         String data = m.group();
-
-        if (data == null || data.isEmpty()) {
-            return 0;
+        if (data != null && !data.isEmpty()) {
+            data = data.substring(1);
+            return NumberUtil.isShort(data) ? Short.valueOf(data) : 0;
         }
-
-        data = data.substring(1);
-
-        return NumberUtil.isShort(data) ? Short.valueOf(data) : 0;
+        return (short) 0;
     }
 
     /**
@@ -223,13 +186,9 @@ public class MaterialUtil {
      */
     public static ItemMeta getMetadata(String itemName) {
         Matcher m = METADATA.matcher(itemName);
-
-        if (!m.find()) {
-            return null;
-        }
-
+        if (!m.find()) return null;
         String group = m.group().substring(1);
-        return Metadata.getFromCode(group);
+        return MaterialUtil.Metadata.getFromCode(group);
     }
 
     public static class DataValue {
@@ -241,93 +200,75 @@ public class MaterialUtil {
          * @return data value
          */
         public static byte get(String type, Material material) {
-            if (material == null || material.getData() == null) {
-                return 0;
-            }
+            if (material != null && material.getData() != null) {
+                type = type.toUpperCase().replace(" ", "_");
+                MaterialData materialData = material.getNewData((byte) 0);
+                if (materialData instanceof TexturedMaterial) {
+                    TexturedMaterial texturedMaterial = (TexturedMaterial) materialData;
 
-            type = type.toUpperCase().replace(" ", "_");
+                    for (Material mat : texturedMaterial.getTextures()) {
+                        if (mat.name().startsWith(type) && !mat.equals(material))
+                            return (byte) texturedMaterial.getTextures().indexOf(mat);
+                    }
+                } else {
+                    if (materialData instanceof Colorable) {
+                        DyeColor color;
 
-            MaterialData materialData = material.getNewData((byte) 0);
+                        try {
+                            color = DyeColor.valueOf(type);
+                        } catch (IllegalArgumentException exception) {
+                            return (byte) 0;
+                        }
 
-            if (materialData instanceof TexturedMaterial) {
-                TexturedMaterial texturedMaterial = (TexturedMaterial) materialData;
+                        if (material == Material.INK_SACK) return color.getDyeData();
 
-                for (Material mat : texturedMaterial.getTextures()) {
-                    if (mat.name().startsWith(type) && !mat.equals(material)) {
-                        return (byte) texturedMaterial.getTextures().indexOf(mat);
+                        return color.getWoolData();
+                    }
+
+                    if (materialData instanceof Tree) try {
+                        return TreeSpecies.valueOf(type).getData();
+                    } catch (IllegalArgumentException ex) {
+                        return (byte) 0;
+                    }
+
+                    if (materialData instanceof SpawnEgg) try {
+                        EntityType entityType = EntityType.valueOf(type);
+                        return (byte) entityType.getTypeId();
+                    } catch (IllegalArgumentException ex) {
+                        return (byte) 0;
+                    }
+
+                    if (materialData instanceof Coal) try {
+                        return CoalType.valueOf(type).getData();
+                    } catch (IllegalArgumentException ex) {
+                        return (byte) 0;
                     }
                 }
-            } else if (materialData instanceof Colorable) {
-                DyeColor color;
 
-                try {
-                    color = DyeColor.valueOf(type);
-                } catch (IllegalArgumentException exception) {
-                    return 0;
-                }
-
-                if (material == Material.INK_SACK) {
-                    return color.getDyeData();
-                }
-
-                return color.getWoolData();
-            } else if (materialData instanceof Tree) {
-                try {
-                    return TreeSpecies.valueOf(type).getData();
-                } catch (IllegalArgumentException ex) {
-                    return 0;
-                }
-            } else if (materialData instanceof SpawnEgg) {
-                try {
-                    EntityType entityType = EntityType.valueOf(type);
-
-                    return (byte) entityType.getTypeId();
-                } catch (IllegalArgumentException ex) {
-                    return 0;
-                }
-            } else if (materialData instanceof Coal) {
-                try {
-                    return CoalType.valueOf(type).getData();
-                } catch (IllegalArgumentException ex) {
-                    return 0;
-                }
+                return (byte) 0;
             }
-
-            return 0;
+            return (byte) 0;
         }
 
-        /**
-         * Returns a string with the DataValue
-         *
-         * @param itemStack ItemStack to describe
-         * @return Data value string
-         */
         public static String name(ItemStack itemStack) {
             MaterialData data = itemStack.getData();
-
-            if (data == null) {
-                return null;
-            }
-
-            if (data instanceof TexturedMaterial) {
-                return ((TexturedMaterial) data).getMaterial().name();
-            } else if (data instanceof Colorable) {
+            if (data == null) return null;
+            if (data instanceof TexturedMaterial) return ((TexturedMaterial) data).getMaterial().name();
+            if (data instanceof Colorable) {
                 DyeColor color = ((Colorable) data).getColor();
-
-                return (color != null ? color.name() : null);
-            } else if (data instanceof Tree) {
-                //TreeSpecies specie = TreeSpecies.getByData((byte) (data.getData() & 3)); //This works, but not as intended
-                TreeSpecies specie = ((Tree) data).getSpecies();
-                return (specie != null && specie != TreeSpecies.GENERIC ? specie.name() : null);
-            } else if (data instanceof SpawnEgg) {
-                EntityType type = ((SpawnEgg) data).getSpawnedType();
-                return (type != null ? type.name() : null);
-            } else if (data instanceof Coal) {
-                CoalType coal = ((Coal) data).getType();
-                return (coal != null && coal != CoalType.COAL ? coal.name() : null);
-            } else {
-                return null;
+                return color != null ? color.name() : null;
             }
+            if (data instanceof Tree) {
+                TreeSpecies specie = ((Tree) data).getSpecies();
+                return specie != null && specie != TreeSpecies.GENERIC ? specie.name() : null;
+            }
+            if (data instanceof SpawnEgg) {
+                EntityType type = ((SpawnEgg) data).getSpawnedType();
+                return type != null ? type.name() : null;
+            }
+            if (!(data instanceof Coal)) return null;
+            CoalType coal = ((Coal) data).getType();
+            return coal != null && coal != CoalType.COAL ? coal.name() : null;
         }
     }
 
@@ -340,12 +281,7 @@ public class MaterialUtil {
          */
         public static ItemMeta getFromCode(String code) {
             ItemStack item = ChestShop.getItemDatabase().getFromCode(code);
-
-            if (item == null) {
-                return null;
-            } else {
-                return item.getItemMeta();
-            }
+            return item == null ? null : item.getItemMeta();
         }
 
         /**
@@ -369,17 +305,24 @@ public class MaterialUtil {
          * @return itemStack that was parsed
          */
         public static ItemStack getFromString(String itemName) {
-            if (!isInitialized) {
-                return null;
-            }
+			/* TODO gamerforEA code replace, old code:
+			if (!isInitialized)
+				return null;
+			else
+			{
+				String name = itemName.replace(':', ';');
 
-            String name = itemName.replace(':', ';');
-
-            try {
-                return OddItem.getItemStack(name);
-            } catch (Exception ex) {
-                return null;
-            }
+				try
+				{
+					return OddItem.getItemStack(name);
+				}
+				catch (Exception var3)
+				{
+					return null;
+				}
+			} */
+            return null;
+            // TODO gamerforEA code end
         }
 
         /**
